@@ -101,7 +101,10 @@ extension DetailServiceProtocol {
     
 }
 
-open class _DetailService<State, Property : Equatable> : _Service<State> {
+open class _DetailService<_State, _Property : Equatable> : _Service<_State> {
+    
+    public typealias State = _State
+    public typealias Property = _Property
     
     public final var oldValue : Property?
     
