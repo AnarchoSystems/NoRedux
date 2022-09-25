@@ -27,6 +27,8 @@ open class _Service<State> {
     
     internal(set) public final weak var store : Store<State>!
     
+    public init() {}
+    
 }
 
 public typealias Service<State> = _Service<State> & ServiceProtocol
@@ -41,6 +43,10 @@ open class _LifeCycleService<State> : _Service<State> {
     public final func appDidRunAction() {}
     
     public final func appDidDispatch() {}
+    
+    public override init() {
+        super.init()
+    }
     
 }
 
@@ -122,6 +128,10 @@ open class _DetailService<_State, _Property : Equatable> : _Service<_State> {
     public final func appWillShutdown() {}
     
     open var observedEvents : PropertyEvents {.perDispatch}
+    
+    public override init() {
+        super.init()
+    }
     
 }
 
