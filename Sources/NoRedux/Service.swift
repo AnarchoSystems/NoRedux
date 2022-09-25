@@ -77,6 +77,8 @@ public protocol DetailServiceProtocol : ServiceProtocol {
     
     var oldValue : Property? {get set}
     
+    var newValue : Property {get set}
+    
 }
 
 extension DetailServiceProtocol {
@@ -91,10 +93,10 @@ extension DetailServiceProtocol {
     
     public func appDidDispatch() {
         guard observedEvents.contains(.perDispatch) else {return}
-        let newVal = readDetail()
-        guard newVal != oldValue else {return}
+        newValue = readDetail()
+        guard newValue != oldValue else {return}
         propertyDidChange()
-        oldValue = newVal
+        oldValue = newValue
     }
     
 }
@@ -102,6 +104,13 @@ extension DetailServiceProtocol {
 open class _DetailService<State, Property : Equatable> : _Service<State> {
     
     public final var oldValue : Property?
+    
+    public final var newValue : Property {
+        get {_newValue!}
+        set(nw) {_newValue = nw}
+    }
+    
+    private final var _newValue : Property?
     
     public final func appWillInit() {}
     
