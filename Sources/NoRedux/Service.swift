@@ -46,22 +46,9 @@ open class _LifeCycleService<State> : _Service<State> {
 
 public typealias LifeCycleService<State> = _LifeCycleService<State> & ServiceProtocol
 
-public struct PropertyEvents : OptionSet {
-    
-    public let rawValue : UInt8
-    
-    public init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
-    
-    public static let none : PropertyEvents = []
-    
-    public static let perAction = PropertyEvents(rawValue: 1)
-    
-    public static let perDispatch = PropertyEvents(rawValue: 2)
-    
-    public static let all : PropertyEvents = [.perAction, .perDispatch]
-    
+public enum PropertyEvents {
+    case perAction
+    case perDispatch
 }
 
 public protocol DetailServiceProtocol : ServiceProtocol {
@@ -75,7 +62,7 @@ public protocol DetailServiceProtocol : ServiceProtocol {
     
     var observedEvents : PropertyEvents {get}
     
-    var oldValue : Property? {get set}
+    var oldValue : Property {get set}
     
     var newValue : Property {get set}
     
@@ -83,20 +70,30 @@ public protocol DetailServiceProtocol : ServiceProtocol {
 
 extension DetailServiceProtocol {
     
+    public func appWillDispatch() {
+        guard observedEvents == .perDispatch else {return}
+        oldValue = readDetail()
+    }
+    
+    public func appWillRunAction() {
+        guard observedEvents == .perAction else {return}
+        oldValue = readDetail()
+    }
+    
     public func appDidRunAction() {
-        guard observedEvents.contains(.perAction) else {return}
-        let newVal = readDetail()
-        guard newVal != oldValue else {return}
-        propertyDidChange()
-        oldValue = newVal
+        guard observedEvents == .perAction else {return}
+        newValue = readDetail()
+        if newValue != oldValue {
+            propertyDidChange()
+        }
     }
     
     public func appDidDispatch() {
-        guard observedEvents.contains(.perDispatch) else {return}
+        guard observedEvents == .perDispatch else {return}
         newValue = readDetail()
-        guard newValue != oldValue else {return}
-        propertyDidChange()
-        oldValue = newValue
+        if newValue != oldValue {
+            propertyDidChange()
+        }
     }
     
 }
@@ -106,25 +103,26 @@ open class _DetailService<_State, _Property : Equatable> : _Service<_State> {
     public typealias State = _State
     public typealias Property = _Property
     
-    public final var oldValue : Property?
+    public final var oldValue : Property {
+        get {_oldValue}
+        set(nw) {_oldValue =  nw}
+    }
+    
+    private final var _oldValue : Property!
     
     public final var newValue : Property {
-        get {_newValue!}
+        get {_newValue}
         set(nw) {_newValue = nw}
     }
     
-    private final var _newValue : Property?
+    private final var _newValue : Property!
     
     public final func appWillInit() {}
     
     public final func appWillShutdown() {}
     
-    public final func appWillDispatch() {}
-    
-    public final func appWillRunAction() {}
-    
     open var observedEvents : PropertyEvents {.perDispatch}
-
+    
 }
 
 public typealias DetailService<State, Property : Equatable> = _DetailService<State, Property> & DetailServiceProtocol
