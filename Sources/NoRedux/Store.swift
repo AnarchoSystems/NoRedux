@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol StoreProtocol : ObservableObject {
+public protocol StoreProtocol<State> : ObservableObject {
     associatedtype State
     @MainActor
     var state : State {get}
@@ -15,20 +15,11 @@ public protocol StoreProtocol : ObservableObject {
     func send(_ action: @escaping (inout State) -> Void)
 }
 
-open class Store<State> : StoreProtocol {
-    
-    @MainActor
-    public var state : State {fatalError()}
-    @MainActor
-    public func send(_ action: @escaping (inout State) -> Void) {fatalError()}
-    
-}
-
-public final class BaseStore<State> : Store<State> {
+public final class Store<State> : StoreProtocol {
 
     private var _state : State
     @MainActor
-    public override var state : State {_state}
+    public var state : State {_state}
     private let services : [Service<State>]
     
     
@@ -49,7 +40,6 @@ public final class BaseStore<State> : Store<State> {
         self.services = services
         self._state = initialize(environment)
         self.warnActionsAfterShutdown = environment.internalFlags.warnActionsAfterShutdown
-        super.init()
         for service in services {
             service.store = self
             inject(environment: environment, to: service)
@@ -75,8 +65,9 @@ public final class BaseStore<State> : Store<State> {
     
     @inlinable
     @MainActor
-    public override func send(_ action: @escaping (inout State) -> Void) {
+    public func send(_ action: @escaping (inout State) -> Void) {
         actionQueue.append(action)
+        dispatchActions(expectedActions: 1)
         
     }
     
@@ -126,11 +117,11 @@ public final class BaseStore<State> : Store<State> {
             
         }
         
-        for service in services {
+        actionQueue = []
+        
+        for service in services.reversed() {
             service.appDidDispatch()
         }
-        
-        actionQueue = []
         
     }
     
