@@ -202,22 +202,7 @@ open class _CommandService<_State, _Command> : _Service<_State, _Command> {
 
 public typealias CommandService<State, Command> = _CommandService<State, Command> & CommandServiceProtocol
 
-
-public struct DownCast<Whole, Part> {
-    
-    let _extract : (Whole) -> Part?
-    let _inject : (Part) -> Whole
-    
-    public init(extract: @escaping (Whole) -> Part?,
-                inject: @escaping (Part) -> Whole) {
-        self._extract = extract
-        self._inject = inject
-    }
-    
-    public func extract(_ whole: Whole) -> Part? {_extract(whole)}
-    public func inject(_ part: Part) -> Whole {_inject(part)}
-    
-}
+import CasePaths
 
 final class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigCommand>, ServiceProtocol, Reader {
     
@@ -243,13 +228,13 @@ final class AcceptingService<State, SmallCommand, BigCommand> : Service<State, B
     
     internal(set) public final override var store : Store<State, BigCommand>! {
         get {fatalError()}
-        set {guard let newValue else {return}; wrapped.store = AcceptingStore(store: newValue, inject: transform.inject)}
+        set {guard let newValue else {return}; wrapped.store = AcceptingStore(store: newValue, inject: transform.embed)}
     }
     
     let wrapped : Service<State, SmallCommand>
-    let transform : DownCast<BigCommand, SmallCommand>
+    let transform : CasePath<BigCommand, SmallCommand>
     
-    init(wrapped: Service<State, SmallCommand>, transform: DownCast<BigCommand, SmallCommand>) {
+    init(wrapped: Service<State, SmallCommand>, transform: CasePath<BigCommand, SmallCommand>) {
         self.wrapped = wrapped
         self.transform = transform
     }
@@ -266,7 +251,7 @@ final class AcceptingService<State, SmallCommand, BigCommand> : Service<State, B
         guard let command else {
             return wrapped.run(nil)
         }
-        let cmd = transform.extract(command)
+        let cmd = transform.extract(from: command)
         wrapped.run(cmd)
     }
     
@@ -283,7 +268,7 @@ final class AcceptingService<State, SmallCommand, BigCommand> : Service<State, B
 
 public extension _Service {
     
-    func handling<BigCommand>(_ type: BigCommand.Type = BigCommand.self, _ transform: DownCast<BigCommand, Command>) -> Service<State, BigCommand> {
+    func handling<BigCommand>(_ type: BigCommand.Type = BigCommand.self, _ transform: CasePath<BigCommand, Command>) -> Service<State, BigCommand> {
         guard let self = self as? Service<State, Command> else {
             fatalError("Please inherit from ServiceProtocol.")
         }
