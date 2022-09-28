@@ -9,6 +9,7 @@ import Combine
 
 public class Module<Store : StoreProtocol, Part> : StoreProtocol {
     
+    public typealias Command = Store.Command
     public typealias Whole = Store.State
     
     @usableFromInline
@@ -32,7 +33,7 @@ public class Module<Store : StoreProtocol, Part> : StoreProtocol {
     }
     
     @MainActor
-    public func send(_ change: @escaping (inout Part) -> Void) {
+    public func send(_ change: @escaping (inout Part) -> Command) {
         store.send{
             change(&$0[keyPath: self.lens])
         }

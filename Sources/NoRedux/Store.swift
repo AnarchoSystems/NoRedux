@@ -7,20 +7,23 @@
 
 import Foundation
 
-public protocol StoreProtocol<State> : ObservableObject {
+public protocol StoreProtocol<State, Command> : ObservableObject {
     associatedtype State
+    associatedtype Command
     @MainActor
     var state : State {get}
     @MainActor
-    func send(_ action: @escaping (inout State) -> Void)
+    func send(_ action: @escaping (inout State) -> Command)
 }
 
-public final class Store<State> : StoreProtocol {
+public typealias BasicStore<State> = Store<State, Void>
+
+public final class Store<State, Command> : StoreProtocol {
 
     private var _state : State
     @MainActor
     public var state : State {_state}
-    private let services : [Service<State>]
+    private let services : [any Service<State, Command>]
     
     
     private var warnActionsAfterShutdown : Bool
@@ -30,11 +33,11 @@ public final class Store<State> : StoreProtocol {
     internal var hasShutdown = false
     
     @usableFromInline
-    internal var actionQueue : [(inout State) -> Void] = []
+    internal var actionQueue : [(inout State) -> Command] = []
     
     @MainActor
     public init(environment: Dependencies = [],
-                services: [Service<State>],
+                services: [any Service<State, Command>] = [],
                 initialize: (Dependencies) -> State)
     {
         self.services = services
@@ -56,7 +59,7 @@ public final class Store<State> : StoreProtocol {
     @inlinable
     @MainActor
     public convenience init(environment: Dependencies = [],
-                services: [Service<State>],
+                services: [any Service<State, Command>] = [],
                 state: State) {
         self.init(environment: environment,
                   services: services,
@@ -65,7 +68,7 @@ public final class Store<State> : StoreProtocol {
     
     @inlinable
     @MainActor
-    public func send(_ action: @escaping (inout State) -> Void) {
+    public func send(_ action: @escaping (inout State) -> Command) {
         actionQueue.append(action)
         dispatchActions(expectedActions: 1)
         
@@ -95,10 +98,6 @@ public final class Store<State> : StoreProtocol {
         
         var idx = 0
         
-        for service in services {
-            service.appWillDispatch()
-        }
-        
         while idx < actionQueue.count {
             
             let action = actionQueue[idx]
@@ -107,10 +106,10 @@ public final class Store<State> : StoreProtocol {
                 service.appWillRunAction()
             }
             
-            action(&_state)
+            let command = action(&_state)
             
-            for service in services.reversed() {
-                service.appDidRunAction()
+            for service in services {
+                service.run(command)
             }
             
             idx += 1
@@ -118,10 +117,6 @@ public final class Store<State> : StoreProtocol {
         }
         
         actionQueue = []
-        
-        for service in services.reversed() {
-            service.appDidDispatch()
-        }
         
     }
     

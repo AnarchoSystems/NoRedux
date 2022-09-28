@@ -6,41 +6,60 @@
 //
 
 
-public protocol ServiceProtocol : AnyObject {
+public protocol _ServiceProtocol : AnyObject {
     
     @MainActor
     func appWillInit()
     @MainActor
     func appWillShutdown()
     @MainActor
-    func appWillDispatch()
-    @MainActor
     func appWillRunAction()
     @MainActor
-    func appDidRunAction()
-    @MainActor
-    func appDidDispatch()
+    func run(_ command: Any)
     
 }
 
-open class _Service<State> {
+public protocol ServiceProtocol : _ServiceProtocol {
     
-    internal(set) public final weak var store : Store<State>!
+    associatedtype Command
+    
+    @MainActor
+    func run(_ command: Command)
+    
+}
+
+public extension ServiceProtocol {
+    
+    @MainActor
+    func run(_ command: Any) {
+        if let command = command as? Command {
+            run(command)
+        }
+    }
+    
+}
+
+open class _Service<_State, _Command> {
+    
+    public typealias State = _State
+    public typealias Command = _Command
+    
+    internal(set) public final weak var store : Store<State, _Command>!
     
     public init() {}
     
 }
 
-public typealias Service<State> = _Service<State> & ServiceProtocol
+public typealias Service<State, Command> = _Service<State,Command> & _ServiceProtocol
 
 
-open class _LifeCycleService<State> : _Service<State> {
+open class _LifeCycleService<_State, _Command> : _Service<_State, _Command> {
     
     public final func appWillDispatch() {}
     
     public final func appWillRunAction() {}
     
-    public final func appDidRunAction() {}
+    public final func run(_ command: Command) {}
     
     public final func appDidDispatch() {}
     
@@ -50,12 +69,9 @@ open class _LifeCycleService<State> : _Service<State> {
     
 }
 
-public typealias LifeCycleService<State> = _LifeCycleService<State> & ServiceProtocol
+public typealias LifeCycleService<State, Command> = _LifeCycleService<State, Command> & ServiceProtocol
+public typealias BasicLifeCycleService<State> = LifeCycleService<State, Void>
 
-public enum PropertyEvents {
-    case perAction
-    case perDispatch
-}
 
 public protocol DetailServiceProtocol : ServiceProtocol {
     
@@ -66,7 +82,7 @@ public protocol DetailServiceProtocol : ServiceProtocol {
     
     func readDetail() -> Property
     
-    var observedEvents : PropertyEvents {get}
+    var oldValueExists : Bool {get}
     
     var oldValue : Property {get set}
     
@@ -76,37 +92,24 @@ public protocol DetailServiceProtocol : ServiceProtocol {
 
 extension DetailServiceProtocol {
     
-    public func appWillDispatch() {
-        guard observedEvents == .perDispatch else {return}
-        oldValue = readDetail()
-    }
-    
     public func appWillRunAction() {
-        guard observedEvents == .perAction else {return}
-        oldValue = readDetail()
+        if !oldValueExists {
+            oldValue = readDetail()
+        }
     }
     
-    public func appDidRunAction() {
-        guard observedEvents == .perAction else {return}
+    public func run(_ command: Command) {
         newValue = readDetail()
         if newValue != oldValue {
             propertyDidChange()
         }
-    }
-    
-    public func appDidDispatch() {
-        guard observedEvents == .perDispatch else {return}
-        newValue = readDetail()
-        if newValue != oldValue {
-            propertyDidChange()
-        }
+        oldValue = newValue
     }
     
 }
 
-open class _DetailService<_State, _Property : Equatable> : _Service<_State> {
+open class _DetailService<_State, _Property : Equatable, _Command> : _Service<_State, _Command> {
     
-    public typealias State = _State
     public typealias Property = _Property
     
     public final var oldValue : Property {
@@ -115,6 +118,10 @@ open class _DetailService<_State, _Property : Equatable> : _Service<_State> {
     }
     
     private final var _oldValue : Property!
+    
+    public var oldValueExists : Bool {
+        _oldValue != nil
+    }
     
     public final var newValue : Property {
         get {_newValue}
@@ -127,12 +134,70 @@ open class _DetailService<_State, _Property : Equatable> : _Service<_State> {
     
     public final func appWillShutdown() {}
     
-    open var observedEvents : PropertyEvents {.perDispatch}
-    
     public override init() {
         super.init()
     }
     
 }
 
-public typealias DetailService<State, Property : Equatable> = _DetailService<State, Property> & DetailServiceProtocol
+public typealias DetailService<State, Property : Equatable, Command> = _DetailService<State, Property, Command> & DetailServiceProtocol
+public typealias BasicDetailService<State, Property : Equatable> = DetailService<State, Property, Void>
+
+
+open class _CommandService<_State, _Command> : _Service<_State, _Command> {
+    
+    public final func appWillInit() {}
+    
+    public final func appWillShutdown() {}
+    
+    public override init() {
+        super.init()
+    }
+    
+    public final func appWillRunAction() {}
+    
+}
+
+public typealias CommandService<State, Command> = _CommandService<State, Command> & ServiceProtocol
+
+
+class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigCommand>, ServiceProtocol {
+    
+    let wrapped : Service<State, SmallCommand>
+    let transform : (BigCommand) -> SmallCommand?
+    
+    init(wrapped: Service<State, SmallCommand>, transform: @escaping (BigCommand) -> SmallCommand?) {
+        self.wrapped = wrapped
+        self.transform = transform
+    }
+    
+    func appWillInit() {
+        wrapped.appWillInit()
+    }
+    
+    func appWillRunAction() {
+        wrapped.appWillRunAction()
+    }
+    
+    func run(_ command: BigCommand) {
+        if let command = transform(command) {
+            wrapped.run(command)
+        }
+    }
+    
+    func appWillShutdown() {
+        wrapped.appWillShutdown()
+    }
+    
+}
+
+public extension _Service {
+    
+    func handling<BigCommand>(_ type: BigCommand.Type = BigCommand.self, _ transform: @escaping (BigCommand) -> Command?) -> Service<State, BigCommand> {
+        guard let self = self as? Service<State, Command> else {
+            fatalError("Please inherit from ServiceProtocol.")
+        }
+        return AcceptingService(wrapped: self, transform: transform)
+    }
+    
+}
