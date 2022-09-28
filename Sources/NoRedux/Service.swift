@@ -219,11 +219,11 @@ public struct DownCast<Whole, Part> {
     
 }
 
-class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigCommand>, ServiceProtocol {
+final class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigCommand>, ServiceProtocol, Reader {
     
-    class AcceptingStore : Store<State, SmallCommand> {
+    final class AcceptingStore : Store<State, SmallCommand> {
         
-        let store : Store<State, BigCommand>
+        weak var store : Store<State, BigCommand>!
         let inject : (SmallCommand) -> BigCommand
         
         init(store: Store<State, BigCommand>, inject: @escaping (SmallCommand) -> BigCommand) {
@@ -274,6 +274,11 @@ class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigComm
     
     func appWillShutdown() {
         wrapped.appWillShutdown()
+    }
+    
+    func readValue(from environment: Any) {
+        let environment = environment as! Dependencies
+        inject(environment: environment, to: wrapped)
     }
     
 }

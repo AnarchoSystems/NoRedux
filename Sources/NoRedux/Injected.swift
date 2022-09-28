@@ -5,7 +5,7 @@
 //  Created by Markus Kasperczyk on 24.05.22.
 //
 
-fileprivate protocol Reader {
+internal protocol Reader {
     func readValue(from environment: Any)
 }
 
