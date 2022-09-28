@@ -241,12 +241,10 @@ final class AcceptingService<State, SmallCommand, BigCommand> : Service<State, B
         
     }
     
-    internal(set) public final override var store : Store<State, BigCommand>? {
-        get{_store.store}
-        set {guard let newValue else {return}; _store = AcceptingStore(store: newValue, inject: transform.inject)}
+    internal(set) public final override var store : Store<State, BigCommand>! {
+        get {fatalError()}
+        set {guard let newValue else {return}; wrapped.store = AcceptingStore(store: newValue, inject: transform.inject)}
     }
-    
-    private var _store : AcceptingStore!
     
     let wrapped : Service<State, SmallCommand>
     let transform : DownCast<BigCommand, SmallCommand>
