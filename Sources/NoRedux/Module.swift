@@ -33,7 +33,7 @@ public class Module<Store : StoreProtocol, Part> : StoreProtocol {
     }
     
     @MainActor
-    public func send(_ change: @escaping (inout Part) -> Command) {
+    public func send(_ change: @escaping (inout Part) -> Command?) {
         store.send{
             change(&$0[keyPath: self.lens])
         }

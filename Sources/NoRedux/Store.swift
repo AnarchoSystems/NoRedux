@@ -13,13 +13,23 @@ public protocol StoreProtocol<State, Command> : ObservableObject {
     @MainActor
     var state : State {get}
     @MainActor
-    func send(_ action: @escaping (inout State) -> Command)
+    func send(_ action: @escaping (inout State) -> Command?)
+}
+
+public extension StoreProtocol {
+    
+    @inlinable
+    @MainActor
+    func send(_ action: @escaping (inout State) -> Void) {
+        send {action(&$0); return nil}
+    }
+    
 }
 
 public typealias BasicStore<State> = Store<State, Void>
 
 public final class Store<State, Command> : StoreProtocol {
-
+    
     private var _state : State
     @MainActor
     public var state : State {_state}
@@ -33,7 +43,7 @@ public final class Store<State, Command> : StoreProtocol {
     internal var hasShutdown = false
     
     @usableFromInline
-    internal var actionQueue : [(inout State) -> Command] = []
+    internal var actionQueue : [(inout State) -> Command?] = []
     
     @MainActor
     public init(environment: Dependencies = [],
@@ -59,8 +69,8 @@ public final class Store<State, Command> : StoreProtocol {
     @inlinable
     @MainActor
     public convenience init(environment: Dependencies = [],
-                services: [any Service<State, Command>] = [],
-                state: State) {
+                            services: [any Service<State, Command>] = [],
+                            state: State) {
         self.init(environment: environment,
                   services: services,
                   initialize: {_ in state})
@@ -68,7 +78,7 @@ public final class Store<State, Command> : StoreProtocol {
     
     @inlinable
     @MainActor
-    public func send(_ action: @escaping (inout State) -> Command) {
+    public func send(_ action: @escaping (inout State) -> Command?) {
         actionQueue.append(action)
         dispatchActions(expectedActions: 1)
         
@@ -133,11 +143,11 @@ public final class Store<State, Command> : StoreProtocol {
     
     @MainActor
     private func maybeWarnShutdown() {
-        #if DEBUG
+#if DEBUG
         if warnActionsAfterShutdown {
             print("NoRedux: The store has been invalidated, actions are no longer accepted.\n If sending actions to a dead store is somehow acceptable for your app, you can silence this warning  by setting internalFlags.warnActionsAfterShutdown to false in the environment or by compiling in release mode.")
         }
-        #endif
+#endif
     }
     
 }

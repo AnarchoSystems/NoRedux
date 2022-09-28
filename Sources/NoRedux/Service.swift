@@ -15,7 +15,7 @@ public protocol _ServiceProtocol : AnyObject {
     @MainActor
     func appWillRunAction()
     @MainActor
-    func run(_ command: Any)
+    func run(_ command: Any?)
     
 }
 
@@ -24,16 +24,19 @@ public protocol ServiceProtocol : _ServiceProtocol {
     associatedtype Command
     
     @MainActor
-    func run(_ command: Command)
+    func run(_ command: Command?)
     
 }
 
 public extension ServiceProtocol {
     
     @MainActor
-    func run(_ command: Any) {
+    func run(_ command: Any?) {
         if let command = command as? Command {
             run(command)
+        }
+        else {
+            run(nil)
         }
     }
     
@@ -59,7 +62,7 @@ open class _LifeCycleService<_State, _Command> : _Service<_State, _Command> {
     
     public final func appWillRunAction() {}
     
-    public final func run(_ command: Command) {}
+    public final func run(_ command: Command?) {}
     
     public final func appDidDispatch() {}
     
@@ -78,27 +81,34 @@ public protocol DetailServiceProtocol : ServiceProtocol {
     associatedtype State
     associatedtype Property : Equatable
     
+    @MainActor
     func propertyDidChange()
     
+    @MainActor
     func readDetail() -> Property
     
+    @MainActor
     var oldValueExists : Bool {get}
     
+    @MainActor
     var oldValue : Property {get set}
     
+    @MainActor
     var newValue : Property {get set}
     
 }
 
 extension DetailServiceProtocol {
     
+    @MainActor
     public func appWillRunAction() {
         if !oldValueExists {
             oldValue = readDetail()
         }
     }
     
-    public func run(_ command: Command) {
+    @MainActor
+    public func run(_ command: Command?) {
         newValue = readDetail()
         if newValue != oldValue {
             propertyDidChange()
@@ -112,6 +122,7 @@ open class _DetailService<_State, _Property : Equatable, _Command> : _Service<_S
     
     public typealias Property = _Property
     
+    @MainActor
     public final var oldValue : Property {
         get {_oldValue}
         set(nw) {_oldValue =  nw}
@@ -123,6 +134,7 @@ open class _DetailService<_State, _Property : Equatable, _Command> : _Service<_S
         _oldValue != nil
     }
     
+    @MainActor
     public final var newValue : Property {
         get {_newValue}
         set(nw) {_newValue = nw}
@@ -143,6 +155,24 @@ open class _DetailService<_State, _Property : Equatable, _Command> : _Service<_S
 public typealias DetailService<State, Property : Equatable, Command> = _DetailService<State, Property, Command> & DetailServiceProtocol
 public typealias BasicDetailService<State, Property : Equatable> = DetailService<State, Property, Void>
 
+public protocol CommandServiceProtocol : ServiceProtocol {
+    
+    @MainActor
+    func run(_ command: Command)
+    
+}
+
+public extension CommandServiceProtocol {
+    
+    @MainActor
+    func run(_ command: Command?) {
+        guard let command else {
+            return
+        }
+        run(command)
+    }
+    
+}
 
 open class _CommandService<_State, _Command> : _Service<_State, _Command> {
     
@@ -158,7 +188,7 @@ open class _CommandService<_State, _Command> : _Service<_State, _Command> {
     
 }
 
-public typealias CommandService<State, Command> = _CommandService<State, Command> & ServiceProtocol
+public typealias CommandService<State, Command> = _CommandService<State, Command> & CommandServiceProtocol
 
 
 class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigCommand>, ServiceProtocol {
@@ -179,10 +209,12 @@ class AcceptingService<State, SmallCommand, BigCommand> : Service<State, BigComm
         wrapped.appWillRunAction()
     }
     
-    func run(_ command: BigCommand) {
-        if let command = transform(command) {
-            wrapped.run(command)
+    func run(_ command: BigCommand?) {
+        guard let command else {
+            return wrapped.run(nil)
         }
+        let cmd = transform(command)
+            wrapped.run(cmd)
     }
     
     func appWillShutdown() {
