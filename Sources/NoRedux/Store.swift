@@ -26,13 +26,26 @@ public extension StoreProtocol {
     
 }
 
-public typealias BasicStore<State> = Store<State, Void>
-
-public final class Store<State, Command> : StoreProtocol {
+public class Store<_State, _Command> : StoreProtocol {
     
-    private var _state : State
+    public typealias State = _State
+    public typealias Command = _Command
+    
+    public var state: _State {fatalError("abstract")}
+    
+    public init() {}
+    
+    public func send(_ action: @escaping (inout _State) -> _Command?) {fatalError("abstract")}
+    
+}
+
+public typealias BasicMainStore<State> = MainStore<State, Void>
+
+public final class MainStore<State, Command> : Store<State, Command> {
+    
+    private final var _state : State
     @MainActor
-    public var state : State {_state}
+    public override var state : State {_state}
     private let services : [any Service<State, Command>]
     
     
@@ -53,6 +66,7 @@ public final class Store<State, Command> : StoreProtocol {
         self.services = services
         self._state = initialize(environment)
         self.warnActionsAfterShutdown = environment.internalFlags.warnActionsAfterShutdown
+        super.init()
         for service in services {
             service.store = self
             inject(environment: environment, to: service)
@@ -78,7 +92,7 @@ public final class Store<State, Command> : StoreProtocol {
     
     @inlinable
     @MainActor
-    public func send(_ action: @escaping (inout State) -> Command?) {
+    public override func send(_ action: @escaping (inout State) -> Command?) {
         actionQueue.append(action)
         dispatchActions(expectedActions: 1)
         
@@ -131,7 +145,7 @@ public final class Store<State, Command> : StoreProtocol {
     }
     
     @MainActor
-    public final func shutDown() {
+    public func shutDown() {
         guard !hasShutdown else {
             return maybeWarnShutdown()
         }

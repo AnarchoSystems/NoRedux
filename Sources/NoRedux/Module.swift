@@ -7,23 +7,23 @@
 
 import Combine
 
-public class Module<Store : StoreProtocol, Part> : StoreProtocol {
+public class Module<_Store : StoreProtocol, Part> : Store<Part, _Store.Command> {
     
-    public typealias Command = Store.Command
-    public typealias Whole = Store.State
+    public typealias Command = _Store.Command
+    public typealias Whole = _Store.State
     
     @usableFromInline
-    let store : Store
+    let store : _Store
     @usableFromInline
     let lens : WritableKeyPath<Whole, Part>
     
     @inlinable
     @MainActor
-    public var state : Part {
+    public override var state : Part {
         store.state[keyPath: lens]
     }
     
-    init(_ store: Store, lens: WritableKeyPath<Whole, Part>) {
+    init(_ store: _Store, lens: WritableKeyPath<Whole, Part>) {
         self.store = store
         self.lens = lens
     }
@@ -33,7 +33,7 @@ public class Module<Store : StoreProtocol, Part> : StoreProtocol {
     }
     
     @MainActor
-    public func send(_ change: @escaping (inout Part) -> Command?) {
+    public override func send(_ change: @escaping (inout Part) -> Command?) {
         store.send{
             change(&$0[keyPath: self.lens])
         }
@@ -51,7 +51,7 @@ public extension StoreProtocol {
 
 public extension Module {
     
-    func map<Next>(_ keyPath: WritableKeyPath<Part, Next>) -> Module<Store, Next> {
+    func map<Next>(_ keyPath: WritableKeyPath<Part, Next>) -> Module<_Store, Next> {
         .init(store, lens: lens.appending(path: keyPath))
     }
     
